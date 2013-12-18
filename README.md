@@ -75,8 +75,7 @@ The submission format is VCF 4.1, which you can find the spec for
 
 For all submissions
 * The file must end with .vcf or .vcf.gz
-* All variants must be marked somatic as per methods defined in the spec (wither using 
-the FORMAT field or the INFO field).
+* All variants must be marked somatic as per methods defined in the spec (preferably using the SOMATIC tag in the INFO field).
 * No whitespaces in fields, fields must be tab-delimited (this is also in the spec, but 
 it's a common reason for the vcf parser to fail).
 
