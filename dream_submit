@@ -116,11 +116,6 @@ def validatevcf(invcf):
                     if rec.INFO.get('END') and not (rec.INFO.get('CIEND')):
                         raise ValidationError('Imprecise SV record using END without CIEND: ' + str(rec))
 
-            for call in rec.samples:
-                data = call.data
-                if 'SS' in data._fields:
-                    somatic = True
-
             if not somatic:
                 raise ValidationError('Record found not marked somatic, please mark somatic calls and do not include germline calls.')
 
