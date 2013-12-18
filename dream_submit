@@ -121,8 +121,8 @@ def validatevcf(invcf):
                 if 'SS' in data._fields:
                     somatic = True
 
-        if not somatic:
-            raise ValidationError('Record found not marked somatic, please mark somatic calls and do not include germline calls.')
+            if not somatic:
+                raise ValidationError('Record found not marked somatic, please mark somatic calls and do not include germline calls.')
 
         print "Validation complete."
         print "Total records:",recnum
