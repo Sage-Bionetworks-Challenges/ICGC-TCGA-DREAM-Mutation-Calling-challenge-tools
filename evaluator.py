@@ -37,7 +37,11 @@ def expand_sv_ends(rec):
     assert rec.is_sv
 
     try:
-        endpos = int(rec.INFO.get('END')[0])
+        if rec.INFO.get('END'): # sometimes this is a list, sometimes it's an int
+            if isinstance(rec.INFO.get('END'), list):
+                endpos = int(rec.INFO.get('END')[0])
+            if isinstance(rec.INFO.get('END'), int):
+                endpos = int(rec.INFO.get('END'))
 
         if rec.INFO.get('CIPOS'):
             ci = map(int, rec.INFO.get('CIPOS'))
@@ -113,6 +117,7 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
                 subrecs += 1
 
         matched = False
+        SV_BND_multimatch = False
 
         startpos, endpos = subrec.start, subrec.end
 
@@ -121,6 +126,12 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
         try:
             if relevant(subrec, vtype, ignorechroms) and passfilter(subrec) and subrec.CHROM in truchroms:
                 for trurec in truvcfh.fetch(subrec.CHROM, startpos, end=endpos):
+
+                    # if using BND notation, don't penalize multiple BND records matching one truth interval
+                    if str(trurec) in used_truth: 
+                        if vtype == 'SV' and subrec.INFO.get('SVTYPE') and subrec.INFO.get('SVTYPE') == 'BND':
+                            SV_BND_multimatch = True
+
                     if match(subrec, trurec, vtype=vtype) and str(trurec) not in used_truth:
                         matched = True
                         used_truth[str(trurec)] = True
@@ -132,8 +143,8 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
             tpcount += 1
         else:
             if relevant(subrec, vtype, ignorechroms) and passfilter(subrec) and not svmask(subrec, truvcfh, truchroms): 
-                fpcount += 1 # FP counting method needs to change for real tumors
-                #print "FP:", subrec
+                if not SV_BND_multimatch: # don't penalize BND multi-matches to truth intervals
+                    fpcount += 1 
 
     print "tpcount, fpcount, subrecs, trurecs:"
     print tpcount, fpcount, subrecs, trurecs
