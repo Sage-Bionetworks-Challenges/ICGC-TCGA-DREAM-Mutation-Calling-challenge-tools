@@ -38,11 +38,11 @@ pip install --user PyVCF
 ```
 
 Get a copy of the Mutation Calling contestant toolkit: 
-https://github.com/Sage-Bionetworks/DREAM-WGSMutationBenchmark 
+https://github.com/Sage-Bionetworks/ICGC-TCGA-DREAM-Mutation-Calling-challenge-tools
 
 
 ```
-git clone https://github.com/Sage-Bionetworks/DREAM-WGSMutationBenchmark.git
+git clone https://github.com/Sage-Bionetworks/ICGC-TCGA-DREAM-Mutation-Calling-challenge-tools.git
 ```
 
 
