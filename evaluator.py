@@ -65,7 +65,14 @@ def expand_sv_ends(rec):
 def relevant(rec, vtype, ignorechroms):
     ''' Return true if a record matches the type of variant being investigated '''
     rel = (rec.is_snp and vtype == 'SNV') or (rec.is_sv and vtype == 'SV') or (rec.is_indel and vtype == 'INDEL')
+
+    # 'ignore' types are elways excluded
+    if rec.INFO.get('SVTYPE'):
+        if rec.INFO.get('SVTYPE') in ('IGN', 'MSK'):
+            rel = False 
+
     return rel and (ignorechroms is None or rec.CHROM not in ignorechroms)
+
 
 def passfilter(rec):
     ''' Return true if a record is unfiltered or has 'PASS' in the filter field (pyvcf sets FILTER to None) '''
@@ -74,12 +81,21 @@ def passfilter(rec):
     return False
 
 
-def svmask(rec, vcfh, truchroms):
-    ''' mask snv calls in sv regions '''
-    if rec.is_snp and rec.CHROM in truchroms:
+def mask(rec, vcfh, truchroms, debug=False):
+    ''' mask calls in IGN/MSK regions '''
+    if rec.CHROM in truchroms:
+        # all calls are ignored in MSK regions
         for overlap_rec in vcfh.fetch(rec.CHROM, rec.POS-1, rec.POS):
-            if overlap_rec.is_sv:
-                    return True
+            if overlap_rec.INFO.get('SVTYPE') == 'MSK':
+                if debug:
+                    print "DEBUG: submitted:", str(rec), "overlaps:", str(overlap_rec)
+                return True
+
+        # SNV and INDEL calls are ignored in IGN regions:
+        for overlap_rec in vcfh.fetch(rec.CHROM, rec.POS-1, rec.POS):
+            if (rec.is_snp or rec.is_indel) and overlap_rec.INFO.get('SVTYPE') == 'IGN':
+                return True
+
     return False
 
 
@@ -97,57 +113,78 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
 
     truchroms = {}
 
+    ''' store list of truth records, otherwise the iterator needs to be reset '''
+    trulist = [trurec for trurec in truvcfh]
+
     ''' count records in truth vcf, track contigs/chromosomes '''
-    for trurec in truvcfh:
+    for trurec in trulist:
         if relevant(trurec, vtype, ignorechroms):
             trurecs += 1
             truchroms[trurec.CHROM] = True
 
+    ''' subtract masked variants from truth '''
+    trumasked = 0
+    submasked = 0
+
+    for trurec in trulist:
+        if relevant(trurec, vtype, ignorechroms) and mask(trurec, truvcfh, truchroms):
+            trurecs -= 1
+            trumasked += 1
+
     used_truth = {} # keep track of 'truth' sites used, they should only be usable once
+    used_bnd_mates = {} # if submitters use MATEID in their BND calls we can 'tie' them together
 
     ''' parse submission vcf, compare to truth '''
     for subrec in subvcfh:
-        if passfilter(subrec):
-            if subrec.is_snp and vtype == 'SNV':
-                if not svmask(subrec, truvcfh, truchroms):
+        if relevant(subrec, vtype, ignorechroms) and not mask(subrec, truvcfh, truchroms):
+            if passfilter(subrec):
+                if subrec.is_snp and vtype == 'SNV':
                     subrecs += 1
-            if subrec.is_sv and vtype == 'SV':
-                subrecs += 1
-            if subrec.is_indel and vtype == 'INDEL':
-                subrecs += 1
+                if subrec.is_sv and vtype == 'SV':
+                    subrecs += 1
+                if subrec.is_indel and vtype == 'INDEL':
+                    subrecs += 1
 
-        matched = False
-        SV_BND_multimatch = False
+            matched = False
+            SV_BND_multimatch = False 
 
-        startpos, endpos = subrec.start, subrec.end
+            startpos, endpos = subrec.start, subrec.end
 
-        if vtype == 'SV' and subrec.is_sv:
-            startpos, endpos = expand_sv_ends(subrec)
-        try:
-            if relevant(subrec, vtype, ignorechroms) and passfilter(subrec) and subrec.CHROM in truchroms:
-                for trurec in truvcfh.fetch(subrec.CHROM, startpos, end=endpos):
+            if vtype == 'SV' and subrec.is_sv:
+                startpos, endpos = expand_sv_ends(subrec)
+                if subrec.INFO.get('MATEID'):
+                    used_bnd_mates[subrec.INFO.get('MATEID')[0]] = True
+            try:
+                if passfilter(subrec):
+                    for trurec in truvcfh.fetch(subrec.CHROM, startpos, end=endpos):
+                        # if using BND notation, don't penalize multiple BND records matching one truth interval
+                        if str(trurec) in used_truth: 
+                            if vtype == 'SV' and subrec.INFO.get('SVTYPE') and subrec.INFO.get('SVTYPE') == 'BND':
+                                SV_BND_multimatch = True
 
-                    # if using BND notation, don't penalize multiple BND records matching one truth interval
-                    if str(trurec) in used_truth: 
-                        if vtype == 'SV' and subrec.INFO.get('SVTYPE') and subrec.INFO.get('SVTYPE') == 'BND':
-                            SV_BND_multimatch = True
+                        if match(subrec, trurec, vtype=vtype) and str(trurec) not in used_truth:
+                            matched = True
+                            used_truth[str(trurec)] = True
 
-                    if match(subrec, trurec, vtype=vtype) and str(trurec) not in used_truth:
-                        matched = True
-                        used_truth[str(trurec)] = True
+                if not matched and subrec.ID in used_bnd_mates:
+                    SV_BND_multimatch = True
 
-        except ValueError as e:
-            sys.stderr.write("Warning: " + str(e) + "\n")
+            except ValueError as e:
+                sys.stderr.write("Warning: " + str(e) + "\n")
 
-        if matched:
-            tpcount += 1
+            if matched:
+                tpcount += 1
+            else:
+                if passfilter(subrec): 
+                    if not SV_BND_multimatch: # don't penalize BND multi-matches to truth intervals
+                        fpcount += 1 
+
         else:
-            if relevant(subrec, vtype, ignorechroms) and passfilter(subrec) and not svmask(subrec, truvcfh, truchroms): 
-                if not SV_BND_multimatch: # don't penalize BND multi-matches to truth intervals
-                    fpcount += 1 
+            if relevant(subrec, vtype, ignorechroms):
+                submasked += 1
 
-    print "tpcount, fpcount, subrecs, trurecs:"
-    print tpcount, fpcount, subrecs, trurecs
+    print "tpcount, fpcount, subrecs, submasked, trurecs, trumasked:"
+    print tpcount, fpcount, subrecs, submasked, trurecs, trumasked
 
     sensitivity = float(tpcount) / float(trurecs)
     precision   = float(tpcount) / float(tpcount + fpcount)
@@ -155,6 +192,7 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
     balaccuracy = (sensitivity + specificity) / 2.0
 
     return sensitivity, specificity, balaccuracy
+
 
 if __name__ == '__main__':
     if len(sys.argv) == 4 or len(sys.argv) == 5:
