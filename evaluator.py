@@ -99,6 +99,28 @@ def mask(rec, vcfh, truchroms, debug=False):
     return False
 
 
+def countrecs(submission, vtype='SNV', ignorechroms=None):
+    ''' return number of records in submission '''
+    
+    assert vtype in ('SNV', 'SV', 'INDEL')
+    subvcfh = vcf.Reader(filename=submission)
+
+    subrecs = 0
+
+    for subrec in subvcfh:
+        if passfilter(subrec):
+            if (ignorechroms is None or subrec.CHROM not in ignorechroms):
+                if subrec.is_snp and vtype == 'SNV':
+                    #if not svmask(subrec, truvcfh, truchroms):
+                    subrecs += 1
+                if subrec.is_sv and vtype == 'SV':
+                    subrecs += 1
+                if subrec.is_indel and vtype == 'INDEL':
+                    subrecs += 1
+
+    return subrecs
+
+
 def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
     ''' return stats on sensitivity, specificity, balanced accuracy '''
 
