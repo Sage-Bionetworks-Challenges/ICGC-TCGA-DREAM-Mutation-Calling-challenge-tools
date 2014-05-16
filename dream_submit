@@ -145,11 +145,11 @@ def get_evaluation_by_name(syn, eval_name):
             if 'entity.snv_eval_id' in row or 'entity.sv_eval_id' in row or 'entity.indel_eval_id' in row:
                 out = {}
                 if 'entity.snv_eval_id' in row:
-                    out['svn'] = row['entity.snv_eval_id']
+                    out['snv'] = row['entity.snv_eval_id'][0]
                 if 'entity.sv_eval_id' in row:
-                    out['sv'] = row['entity.sv_eval_id']
+                    out['sv'] = row['entity.sv_eval_id'][0]
                 if 'entity.indel_eval_id' in row:
-                    out['indel'] = row['entity.indel_eval_id']
+                    out['indel'] = row['entity.indel_eval_id'][0]
         if out is not None:
             return out
     return None
