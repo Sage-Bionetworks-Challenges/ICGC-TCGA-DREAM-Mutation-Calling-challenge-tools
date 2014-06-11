@@ -81,47 +81,54 @@ def passfilter(rec):
     return False
 
 
-def mask(rec, vcfh, truchroms, debug=False):
+def mask(rec, vcfh, truchroms, debug=False, active=True):
     ''' mask calls in IGN/MSK regions '''
+
     if rec.CHROM in truchroms:
+
+        # SNV and INDEL calls are ignored in IGN regions, cannot be deactivated with active=False 
+        for overlap_rec in vcfh.fetch(rec.CHROM, rec.POS-1, rec.POS):
+            if (rec.is_snp or rec.is_indel) and overlap_rec.INFO.get('SVTYPE') == 'IGN':
+                return True
+
         # all calls are ignored in MSK regions
         for overlap_rec in vcfh.fetch(rec.CHROM, rec.POS-1, rec.POS):
             if overlap_rec.INFO.get('SVTYPE') == 'MSK':
                 if debug:
                     print "DEBUG: submitted:", str(rec), "overlaps:", str(overlap_rec)
+                if not active:
+                    return False
                 return True
-
-        # SNV and INDEL calls are ignored in IGN regions:
-        for overlap_rec in vcfh.fetch(rec.CHROM, rec.POS-1, rec.POS):
-            if (rec.is_snp or rec.is_indel) and overlap_rec.INFO.get('SVTYPE') == 'IGN':
-                return True
-
+                
     return False
 
 
-def countrecs(submission, vtype='SNV', ignorechroms=None):
+def countrecs(submission, truth, vtype='SNV', ignorechroms=None, truthmask=True):
     ''' return number of records in submission '''
     
     assert vtype in ('SNV', 'SV', 'INDEL')
     subvcfh = vcf.Reader(filename=submission)
+    truvcfh = vcf.Reader(filename=truth)
+
+    truchroms = dict([(trurec.CHROM, True) for trurec in truvcfh])
 
     subrecs = 0
 
     for subrec in subvcfh:
         if passfilter(subrec):
             if (ignorechroms is None or subrec.CHROM not in ignorechroms):
-                if subrec.is_snp and vtype == 'SNV':
-                    #if not svmask(subrec, truvcfh, truchroms):
-                    subrecs += 1
-                if subrec.is_sv and vtype == 'SV':
-                    subrecs += 1
-                if subrec.is_indel and vtype == 'INDEL':
-                    subrecs += 1
+                if not mask(subrec, truvcfh, truchroms, active=truthmask):
+                    if subrec.is_snp and vtype == 'SNV':
+                        subrecs += 1
+                    if subrec.is_sv and vtype == 'SV':
+                        subrecs += 1
+                    if subrec.is_indel and vtype == 'INDEL':
+                        subrecs += 1
 
     return subrecs
 
 
-def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
+def evaluate(submission, truth, vtype='SNV', ignorechroms=None, truthmask=True):
     ''' return stats on sensitivity, specificity, balanced accuracy '''
 
     assert vtype in ('SNV', 'SV', 'INDEL')
@@ -149,7 +156,7 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
     submasked = 0
 
     for trurec in trulist:
-        if relevant(trurec, vtype, ignorechroms) and mask(trurec, truvcfh, truchroms):
+        if relevant(trurec, vtype, ignorechroms) and mask(trurec, truvcfh, truchroms, active=truthmask):
             trurecs -= 1
             trumasked += 1
 
@@ -158,7 +165,7 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
 
     ''' parse submission vcf, compare to truth '''
     for subrec in subvcfh:
-        if relevant(subrec, vtype, ignorechroms) and not mask(subrec, truvcfh, truchroms):
+        if relevant(subrec, vtype, ignorechroms) and not mask(subrec, truvcfh, truchroms, active=truthmask):
             if passfilter(subrec):
                 if subrec.is_snp and vtype == 'SNV':
                     subrecs += 1
@@ -177,10 +184,10 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
                 if subrec.INFO.get('MATEID'):
                     used_bnd_mates[subrec.INFO.get('MATEID')[0]] = True
             try:
-                if passfilter(subrec):
+                if subrec.CHROM in truchroms and passfilter(subrec):
                     for trurec in truvcfh.fetch(subrec.CHROM, startpos, end=endpos):
                         # if using BND notation, don't penalize multiple BND records matching one truth interval
-                        if str(trurec) in used_truth: 
+                        if str(trurec) in used_truth:
                             if vtype == 'SV' and subrec.INFO.get('SVTYPE') and subrec.INFO.get('SVTYPE') == 'BND':
                                 SV_BND_multimatch = True
 
@@ -207,6 +214,13 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None):
 
     print "tpcount, fpcount, subrecs, submasked, trurecs, trumasked:"
     print tpcount, fpcount, subrecs, submasked, trurecs, trumasked
+
+    # sanity checks
+    if trurecs == 0:
+        raise Exception("No unmasked records found in truth file!\n")
+
+    if subrecs == 0:
+        raise Exception("No unmasked variants in submission! Are you sure you selected the correct variant type (SNV/INDEL/SV)?\n")
 
     sensitivity = float(tpcount) / float(trurecs)
     precision   = float(tpcount) / float(tpcount + fpcount)
@@ -236,9 +250,17 @@ if __name__ == '__main__':
             sys.stderr.write("last arg must be either SV, SNV, or INDEL\n")
             sys.exit(1)
 
-        result = evaluate(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist)
-
+        print "\nmasked:"
+        result = evaluate(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=True)
+        count  = countrecs(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=True)
         print "sensitivity, specificity, balanced accuracy: " + ','.join(map(str, result))
+        print "number of unmasked mutations in submission: " + str(count)
+
+        print "\nunmasked:"
+        result = evaluate(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=False)
+        count  = countrecs(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=False)
+        print "sensitivity, specificity, balanced accuracy: " + ','.join(map(str, result))
+        print "number of unmasked mutations in submission: " + str(count)
 
     else:
         print "standalone usage for testing:", sys.argv[0], "<submission VCF> <truth VCF (tabix-indexed)> <SV, SNV, or INDEL> [ignore chrom list (comma-delimited, optional)]"
