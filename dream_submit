@@ -155,11 +155,9 @@ def get_evaluation_by_name(syn, eval_name):
     return None
 
 
-
-
 def get_evalutations(syn):
     out = {}
-    res = syn.query("select * from entity where parentId=='%s'" % (DOWNLOAD_ENTITY) )
+    res = syn.query("select * from entity where parentId=='%s' order by entity.name" % (DOWNLOAD_ENTITY) )
     for row in res['results']:
         if 'entity.uuid' in row:
             try:
@@ -174,6 +172,7 @@ def get_evalutations(syn):
             except KeyError:
                 pass
     return out
+
 
 def main_list_challenge(args, syn):
     e = get_evalutations(syn)
@@ -317,7 +316,6 @@ dream_submit [sv|snv|indel] SAMPLE_NAME --entity syn12345 --name "Name of Submis
     print "You have submitted", sub
 
 
-
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Submit Files to the DREAM mutation calling challenge. Please see https://www.synapse.org/#!Synapse:syn312572/wiki/60703 for usage instructions.')
@@ -394,11 +392,12 @@ if __name__ == "__main__":
     parser_validate.add_argument("vcf", help="VCF file to be validated")
     parser_validate.set_defaults(login=False) #don't need to log into Synapse to validate a file.
     parser_validate.set_defaults(func=main_validate)
-    
+
+
     args = parser.parse_args() 
     if args.login:
         syn = synapseclient.Synapse()
-        if args.user is not None and args.password is not None:
+        if args.user is not None:
             syn.login(args.user, args.password)
         else:
             if 'SYNAPSE_APIKEY' in os.environ and 'SYNAPSE_EMAIL' in os.environ:
