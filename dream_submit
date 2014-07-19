@@ -262,11 +262,33 @@ def main_join(args, syn):
     except synapseclient.exceptions.SynapseHTTPError:
         print "Error Trying to join Evaluation, did you already join?"
 
+
 def main_submit(args, syn):
     """
     This method takes an existing VCF file, uploads it to a personal project folder, and then 
     submits it to the Dream Mutation calling Challenge
     """
+    PUBLIC_SAMPLE_FOLDERS  = ["synthetic.challenge.set1.v2"]
+
+    ## name sample folders nicely
+    FOLDER_NAMES = {
+        "synthetic.challenge.set1.v2": "IS1",
+        "synthetic.challenge.set2":    "IS2",
+        "synthetic.challenge.set3":    "IS3",
+        "synthetic.challenge.set4":    "IS4",
+        "synthetic.challenge.set5":    "IS5"
+    }
+
+    def folder_name(sample):
+        return FOLDER_NAMES.get(sample, sample)
+
+    def not_public(acl):
+        new_permissions = [permissions for permissions in acl['resourceAccess'] \
+            if 'principalId' in permissions \
+            and permissions['principalId'] not in [synapseclient.PUBLIC, synapseclient.AUTHENTICATED_USERS]]
+        acl['resourceAccess'] = new_permissions
+        return acl
+
 
     if (args.vcf is None and args.entity is None) or args.name is None or args.team_name is None or args.sample_name is None or (args.vcf is not None and args.project_id is None):
         print """Usage:
@@ -302,15 +324,26 @@ dream_submit [sv|snv|indel] SAMPLE_NAME --entity syn12345 --name "Name of Submis
         return
 
     if args.vcf is not None:
-        entity = File(args.vcf, parentId=args.project_id)
+        folder_id = syn._findEntityIdByNameAndParent(folder_name(args.sample_name), parent=args.project_id)
+        if folder_id:
+            ## if the folder's already there, don't mess with it
+            folder = syn.get(folder_id)
+        else:
+            folder = Folder(folder_name(args.sample_name), parent=args.project_id, sample=args.sample_name)
+            folder = syn.store(folder, createOrUpdate=True, forceVersion=False)
+            ## if we create a folder, it's private
+            if args.sample_name not in PUBLIC_SAMPLE_FOLDERS:
+                syn._storeACL(folder, not_public(syn._getACL(folder)))
+
+        entity = File(args.vcf, parent=folder)
         if args.test:
             entity.test_submission='true'
-        syn.store(entity)
+        syn.store(entity, forceVersion=False)
     else:
         entity = syn.get(args.entity)
         if args.test:
             entity.test_submission='true'
-            entity = syn.store(entity)
+            entity = syn.store(entity, forceVersion=False)
     sub = syn.submit(evaluation, entity, name=args.name, teamName=args.team_name)
 
     print "You have submitted", sub
