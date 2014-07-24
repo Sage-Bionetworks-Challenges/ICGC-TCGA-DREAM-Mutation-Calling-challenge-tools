@@ -138,6 +138,16 @@ def validatevcf(invcf):
         raise
 
 def get_evaluation_by_name(syn, eval_name):
+    if eval_name == 'test':
+        ## Add test evaluations linked to the "MutationCallingChallengeStaging"
+        ## project (syn2298928).
+        out = {
+            'snv':'2527266',
+            'sv':'2527268',
+            'indel':'2527270'
+        }
+        return out
+
     for field in ['uuid', 'sample_name']:
         out = None
         res = syn.query("select * from entity where parentId=='%s' and %s=='%s'" % (DOWNLOAD_ENTITY, field, eval_name) )
@@ -324,6 +334,8 @@ dream_submit [sv|snv|indel] SAMPLE_NAME --entity syn12345 --name "Name of Submis
         return
 
     if args.vcf is not None:
+
+        ## place submission in a folder by sample name, that might already exist
         folder_id = syn._findEntityIdByNameAndParent(folder_name(args.sample_name), parent=args.project_id)
         if folder_id:
             ## if the folder's already there, don't mess with it
@@ -331,11 +343,19 @@ dream_submit [sv|snv|indel] SAMPLE_NAME --entity syn12345 --name "Name of Submis
         else:
             folder = Folder(folder_name(args.sample_name), parent=args.project_id, sample=args.sample_name)
             folder = syn.store(folder, createOrUpdate=True, forceVersion=False)
-            ## if we create a folder, it's private
+            ## If we create a folder, it's private unless it's in the
+            ## set of public sample folders, in which case it inherits permission
+            ## from the project. This preserves the participants' ability to keep
+            ## things private, if they really want to.
             if args.sample_name not in PUBLIC_SAMPLE_FOLDERS:
                 syn._storeACL(folder, not_public(syn._getACL(folder)))
 
-        entity = File(args.vcf, parent=folder)
+        ## Subfolder by mutation type (snv, sv or indel), which is called "board" in the parameters
+        ## folder structure will end up being Project/[sample]/[mutation_type]/[submission],
+        ## for example: Project/IS1/snv/submission.txt
+        subfolder = syn.store(Folder(args.board, parent=folder), createOrUpdate=True, forceVersion=False)
+
+        entity = File(args.vcf, parent=subfolder)
         if args.test:
             entity.test_submission='true'
         syn.store(entity, forceVersion=False)
@@ -353,8 +373,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Submit Files to the DREAM mutation calling challenge. Please see https://www.synapse.org/#!Synapse:syn312572/wiki/60703 for usage instructions.')
     #Stack.addJobTreeOptions(parser) 
-    parser.add_argument("--user", help="UserName", default=None)
-    parser.add_argument("--password", help="Password", default=None)
+    parser.add_argument("-u", "--user", help="UserName", default=None)
+    parser.add_argument("-p", "--password", help="Password", default=None)
 
     subparsers = parser.add_subparsers(title="subcommand")
 
