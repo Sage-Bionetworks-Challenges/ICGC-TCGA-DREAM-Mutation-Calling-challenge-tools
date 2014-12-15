@@ -36,6 +36,9 @@ except ImportError:
 #these entities are annotated with the evaluation IDs submissions should be sent to
 DOWNLOAD_ENTITY="syn2280639"
 
+# valid SVTYPE entries according to VCFv4.1
+SV_TYPES = ('BND', 'CNV', 'DEL', 'DEL:ME', 'DUP', 'DUP:TANDEM', 'INS', 'INS:    ME', 'INV')
+
 '''
 validatevcf
 
@@ -115,6 +118,14 @@ def validatevcf(invcf):
 
                     if rec.INFO.get('END') and not (rec.INFO.get('CIEND')):
                         raise ValidationError('Imprecise SV record using END without CIEND: ' + str(rec))
+                
+                if rec.INFO.get('SVTYPE'):
+                    rec_svtype = rec.INFO.get('SVTYPE')
+                    if isinstance(rec_svtype, list):
+                        rec_svtype = rec_svtype[0]
+                    
+                    if rec_svtype not in SV_TYPES:
+                        raise ValidationError('SV record with unrecognized SVTYPE: ' + rec_svtype)
 
             if not somatic:
                 raise ValidationError('Record found not marked somatic, please mark somatic calls and do not include germline calls.')
@@ -334,6 +345,8 @@ dream_submit [sv|snv|indel] SAMPLE_NAME --entity syn12345 --name "Name of Submis
         return
 
     if args.vcf is not None:
+        ## require a valid VCF file for successful submission
+        validatevcf(args.vcf)
 
         ## place submission in a folder by sample name, that might already exist
         folder_id = syn._findEntityIdByNameAndParent(folder_name(args.sample_name), parent=args.project_id)
