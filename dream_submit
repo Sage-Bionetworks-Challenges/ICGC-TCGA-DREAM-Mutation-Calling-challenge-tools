@@ -37,7 +37,7 @@ except ImportError:
 DOWNLOAD_ENTITY="syn2280639"
 
 # valid SVTYPE entries according to VCFv4.1
-SV_TYPES = ('BND', 'CNV', 'DEL', 'DEL:ME', 'DUP', 'DUP:TANDEM', 'INS', 'INS:    ME', 'INV')
+SV_TYPES = ('BND', 'CNV', 'DEL', 'DEL:ME', 'DUP', 'DUP:TANDEM', 'INS', 'INS: ME', 'INV')
 
 '''
 validatevcf
