@@ -346,7 +346,7 @@ dream_submit [sv|snv|indel] SAMPLE_NAME --entity syn12345 --name "Name of Submis
 
     if args.vcf is not None:
         ## require a valid VCF file for successful submission
-        validatevcf(args.vcf)
+        main_validate(args, None)
 
         ## place submission in a folder by sample name, that might already exist
         folder_id = syn._findEntityIdByNameAndParent(folder_name(args.sample_name), parent=args.project_id)
