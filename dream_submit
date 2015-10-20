@@ -176,7 +176,7 @@ def get_evaluation_by_name(syn, eval_name):
     return None
 
 
-def get_evalutations(syn):
+def get_evaluations(syn):
     out = {}
     res = syn.query("select * from entity where parentId=='%s' order by entity.name" % (DOWNLOAD_ENTITY) )
     for row in res['results']:
@@ -196,7 +196,7 @@ def get_evalutations(syn):
 
 
 def main_list_challenge(args, syn):
-    e = get_evalutations(syn)
+    e = get_evaluations(syn)
     print "SampleName\tsnv Evaluation\tsv Evaluation\tINDEL Evaluation"
     for sample_name, evaluation in e.items():
         if len(evaluation):
@@ -297,7 +297,8 @@ def main_submit(args, syn):
         "synthetic.challenge.set2":    "IS2",
         "synthetic.challenge.set3":    "IS3",
         "synthetic.challenge.set4":    "IS4",
-        "synthetic.challenge.set5":    "IS5"
+        "synthetic.challenge.set5":    "IS5",
+        "synthetic.challenge.set6":    "IS6"
     }
 
     def folder_name(sample):
