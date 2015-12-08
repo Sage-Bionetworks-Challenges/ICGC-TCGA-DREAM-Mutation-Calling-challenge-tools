@@ -32,7 +32,8 @@ def match(subrec, trurec, vtype='SNV'):
 
 
 def expand_sv_ends(rec, useCIs=True):
-    ''' assign start and end positions to SV calls
+    '''
+    assign start and end positions to SV calls
     using conf. intervals if present and useCIs=True
     '''
     startpos, endpos = rec.start, rec.end
@@ -69,9 +70,13 @@ def relevant(rec, vtype, ignorechroms):
     ''' Return true if a record matches the type of variant being investigated '''
     rel = (rec.is_snp and vtype == 'SNV') or (rec.is_sv and vtype == 'SV') or (rec.is_indel and vtype == 'INDEL')
 
-    # 'ignore' types are elways excluded
+    # 'ignore' types are always excluded
     if rec.INFO.get('SVTYPE'):
-        if rec.INFO.get('SVTYPE') in ('IGN', 'MSK'):
+        rec_svtype_raw = rec.INFO.get('SVTYPE')
+        if isinstance(rec_svtype_raw, list):
+            # take the first value if SVTYPE is a list
+            rec_svtype_raw = rec_svtype_raw[0]
+        if rec_svtype_raw in ('IGN', 'MSK'):
             rel = False 
 
     return rel and (ignorechroms is None or rec.CHROM not in ignorechroms)
@@ -88,20 +93,40 @@ def mask(rec, vcfh, truchroms, debug=False, active=True):
     ''' mask calls in IGN/MSK regions '''
 
     if rec.CHROM in truchroms:
+        if rec.is_sv:
+            teststart, testend = expand_sv_ends(rec, useCIs=False)
+        else:
+            teststart = rec.POS - 1
+            testend = rec.POS
 
-        # SNV and INDEL calls are ignored in IGN regions, cannot be deactivated with active=False 
-        for overlap_rec in vcfh.fetch(rec.CHROM, rec.POS-1, rec.POS):
-            if (rec.is_snp or rec.is_indel) and overlap_rec.INFO.get('SVTYPE') == 'IGN':
+        for overlap_rec in vcfh.fetch(rec.CHROM, teststart, testend):
+            overlap_rec_svtype = overlap_rec.INFO.get('SVTYPE')
+            if overlap_rec_svtype and isinstance(overlap_rec_svtype, list):
+                # take the first value if SVTYPE is a list
+                overlap_rec_svtype = overlap_rec_svtype[0]
+            
+            # SNV and INDEL calls are ignored in IGN regions, cannot be deactivated with active=False 
+            if (rec.is_snp or rec.is_indel) and overlap_rec_svtype == 'IGN':
                 return True
 
-        # all calls are ignored in MSK regions
-        for overlap_rec in vcfh.fetch(rec.CHROM, rec.POS-1, rec.POS):
-            if overlap_rec.INFO.get('SVTYPE') == 'MSK':
-                if debug:
-                    print "DEBUG: submitted:", str(rec), "overlaps:", str(overlap_rec)
-                if not active:
-                    return False
-                return True
+            # calls are ignored in MSK regions if active=True
+            if overlap_rec_svtype == 'MSK':
+                is_masked = True
+                
+                if rec.is_sv:
+                    mskstart, mskend = expand_sv_ends(overlap_rec, useCIs=False)
+                    
+                    # compute fraction of rec that is in the masked region
+                    overlap_frac = float(min(mskend, testend) - max(mskstart, teststart))/float(testend - teststart)
+                    if overlap_frac <= 0.5:
+                        # sizable fraction of subrec is in unmasked region
+                        is_masked = False
+                
+                if is_masked:
+                    if debug:
+                        print "DEBUG: submitted:", str(rec), "overlaps:", str(overlap_rec)
+                    if active:
+                        return True
                 
     return False
 
