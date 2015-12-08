@@ -239,13 +239,31 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None, truthmask=True):
     if subrecs == 0:
         raise Exception("No unmasked variants in submission! Are you sure you selected the correct variant type (SNV/INDEL/SV)?\n")
 
-    sensitivity = float(tpcount) / float(trurecs)
-    precision   = float(tpcount) / float(tpcount + fpcount)
-    specificity = 1.0 - float(fpcount) / float(subrecs)
-    balaccuracy = (sensitivity + specificity) / 2.0
+    result = { 'tp' : float(tpcount),
+               'fp' : float(fpcount),
+               'fn' : float(trurecs) - float(tpcount)}
+    
+    return result
 
-    return sensitivity, specificity, balaccuracy
 
+def stats(result):
+    ''' calculate precision, recall, fscore  from result dictionary '''
+    assert 'tp' in result and 'fp' in result and 'fn' in result, "invalid result dictionary!"
+    
+    recall = float(1)
+    if result['tp'] + result['fn'] > 0:
+        recall = result['tp'] / (result['tp'] + result['fn'])
+    
+    precision = float(1)
+    if result['tp'] + result['fp'] > 0:
+        precision = result['tp'] / (result['tp'] + result['fp'])
+    
+    fscore = float(0)
+    if precision > 0 or recall > 0:
+        fscore = 2*((precision*recall) / (precision+recall))
+    
+    return recall, precision, fscore
+    
 
 if __name__ == '__main__':
     if len(sys.argv) == 4 or len(sys.argv) == 5:
@@ -268,16 +286,18 @@ if __name__ == '__main__':
             sys.exit(1)
 
         print "\nmasked:"
-        result = evaluate(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=True)
-        count  = countrecs(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=True)
-        print "sensitivity, specificity, balanced accuracy: " + ','.join(map(str, result))
-        print "number of unmasked mutations in submission: " + str(count)
+        counts = evaluate(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=True)
+        statresults = stats(counts)
+        ncalls  = countrecs(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=True)
+        print "recall, precision, F1-score: " + ','.join(map(str, statresult))
+        print "number of unmasked mutations in submission: " + str(ncalls)
 
         print "\nunmasked:"
-        result = evaluate(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=False)
-        count  = countrecs(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=False)
-        print "sensitivity, specificity, balanced accuracy: " + ','.join(map(str, result))
-        print "number of unmasked mutations in submission: " + str(count)
+        counts = evaluate(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=False)
+        statresults = stats(counts)
+        ncalls  = countrecs(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=False)
+        print "recall, precision, F1-score: " + ','.join(map(str, statresult))
+        print "number of unmasked mutations in submission: " + str(ncalls)
 
     else:
         print "standalone usage for testing:", sys.argv[0], "<submission VCF> <truth VCF (tabix-indexed)> <SV, SNV, or INDEL> [ignore chrom list (comma-delimited, optional)]"
