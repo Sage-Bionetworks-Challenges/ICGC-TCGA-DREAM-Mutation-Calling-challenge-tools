@@ -31,7 +31,7 @@ def match(subrec, trurec, vtype='SNV'):
     return False
 
 
-def expand_sv_ends(rec, use CIs=True):
+def expand_sv_ends(rec, useCIs=True):
     ''' assign start and end positions to SV calls
     using conf. intervals if present and useCIs=True
     '''
@@ -275,14 +275,14 @@ if __name__ == '__main__':
         statresults = stats(counts)
         ncalls  = countrecs(counts)
         print "recall, precision, F1-score: " + ','.join(map(str, statresult))
-        print "number of unmasked mutations in submission: " + str(ncalls)
+        print "number of counted mutations in submission: " + str(ncalls)
 
         print "\nunmasked:"
         counts = evaluate(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=False)
         statresults = stats(counts)
         ncalls  = countrecs(counts)
         print "recall, precision, F1-score: " + ','.join(map(str, statresult))
-        print "number of unmasked mutations in submission: " + str(ncalls)
+        print "number of counted mutations in submission: " + str(ncalls)
 
     else:
         print "standalone usage for testing:", sys.argv[0], "<submission VCF> <truth VCF (tabix-indexed)> <SV, SNV, or INDEL> [ignore chrom list (comma-delimited, optional)]"
