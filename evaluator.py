@@ -103,31 +103,13 @@ def mask(rec, vcfh, truchroms, debug=False, active=True):
     return False
 
 
-def countrecs(submission, truth, vtype='SNV', ignorechroms=None, truthmask=True):
-    ''' return number of records in submission '''
+def countrecs(result):
+    ''' return number of counted mutation calls in submission '''
+    assert 'tp' in result and 'fp' in result, "invalid result dictionary!"
     
-    assert vtype in ('SNV', 'SV', 'INDEL')
-    subvcfh = vcf.Reader(filename=submission)
-    truvcfh = vcf.Reader(filename=truth)
-
-    truchroms = dict([(trurec.CHROM, True) for trurec in truvcfh])
-    usechr = truchroms.keys()[0].startswith('chr')
-
-    subrecs = 0
-
-    for subrec in subvcfh:
-        subrec = prefix(subrec, usechr)
-        if passfilter(subrec):
-            if (ignorechroms is None or subrec.CHROM not in ignorechroms):
-                if not mask(subrec, truvcfh, truchroms, active=truthmask):
-                    if subrec.is_snp and vtype == 'SNV':
-                        subrecs += 1
-                    if subrec.is_sv and vtype == 'SV':
-                        subrecs += 1
-                    if subrec.is_indel and vtype == 'INDEL':
-                        subrecs += 1
-
-    return subrecs
+    ncalls = result['tp'] + result['fp']
+    
+    return ncalls
 
 
 def prefix(rec, usechr):
@@ -288,14 +270,14 @@ if __name__ == '__main__':
         print "\nmasked:"
         counts = evaluate(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=True)
         statresults = stats(counts)
-        ncalls  = countrecs(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=True)
+        ncalls  = countrecs(counts)
         print "recall, precision, F1-score: " + ','.join(map(str, statresult))
         print "number of unmasked mutations in submission: " + str(ncalls)
 
         print "\nunmasked:"
         counts = evaluate(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=False)
         statresults = stats(counts)
-        ncalls  = countrecs(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=False)
+        ncalls  = countrecs(counts)
         print "recall, precision, F1-score: " + ','.join(map(str, statresult))
         print "number of unmasked mutations in submission: " + str(ncalls)
 
