@@ -21,8 +21,8 @@ def match(subrec, trurec, vtype='SNV'):
             return True
 
     if vtype == 'SV' and subrec.is_sv and trurec.is_sv:
-        trustart, truend = expand_sv_ends(trurec)
-        substart, subend = expand_sv_ends(subrec)
+        trustart, truend = expand_sv_ends(trurec, useCIs=False)
+        substart, subend = expand_sv_ends(subrec, useCIs=False)
 
         # check for overlap
         if min(truend, subend) - max(trustart, substart) > 0:
@@ -31,8 +31,10 @@ def match(subrec, trurec, vtype='SNV'):
     return False
 
 
-def expand_sv_ends(rec):
-    ''' assign start and end positions to SV calls using conf. intervals if present '''
+def expand_sv_ends(rec, use CIs=True):
+    ''' assign start and end positions to SV calls
+    using conf. intervals if present and useCIs=True
+    '''
     startpos, endpos = rec.start, rec.end
     assert rec.is_sv
 
@@ -43,15 +45,16 @@ def expand_sv_ends(rec):
             if isinstance(rec.INFO.get('END'), int):
                 endpos = int(rec.INFO.get('END'))
 
-        if rec.INFO.get('CIPOS'):
-            ci = map(int, rec.INFO.get('CIPOS'))
-            if ci[0] < 0:
-                startpos += ci[0]
+        if useCIs:
+            if rec.INFO.get('CIPOS'):
+                ci = map(int, rec.INFO.get('CIPOS'))
+                if ci[0] < 0:
+                    startpos += ci[0]
 
-        if rec.INFO.get('CIEND'):
-            ci = map(int, rec.INFO.get('CIEND')) 
-            if ci[0] > 0:
-                endpos += ci[0]
+            if rec.INFO.get('CIEND'):
+                ci = map(int, rec.INFO.get('CIEND')) 
+                if ci[0] > 0:
+                    endpos += ci[0]
 
     except TypeError as e:
         sys.stderr.write("error expanding sv interval: " + str(e) + " for record: " + str(rec) + "\n")
@@ -179,7 +182,7 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None, truthmask=True):
             startpos, endpos = subrec.start, subrec.end
 
             if vtype == 'SV' and subrec.is_sv:
-                startpos, endpos = expand_sv_ends(subrec)
+                startpos, endpos = expand_sv_ends(subrec, useCIs=False)
                 if subrec.INFO.get('MATEID'):
                     used_bnd_mates[subrec.INFO.get('MATEID')[0]] = True
             try:
