@@ -238,7 +238,7 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None, truthmask=True):
                             '''
                             matched a true variant that was already counted
                             and/or has a different mask status/both are masked
-                            only note if a true variant wasn't already IDed for subrecj
+                            only note if a true variant wasn't already IDed for subrec
                             '''
                             matched = 'T'
 
@@ -346,14 +346,14 @@ if __name__ == '__main__':
         counts = evaluate(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=True)
         statresults = stats(counts)
         ncalls  = countrecs(counts)
-        print "recall, precision, F1-score: " + ','.join(map(str, statresult))
+        print "recall, precision, F1-score: " + ','.join(map(str, statresults))
         print "number of counted mutations in submission: " + str(ncalls)
 
         print "\nunmasked:"
         counts = evaluate(subvcf, truvcf, vtype=evtype, ignorechroms=chromlist, truthmask=False)
         statresults = stats(counts)
         ncalls  = countrecs(counts)
-        print "recall, precision, F1-score: " + ','.join(map(str, statresult))
+        print "recall, precision, F1-score: " + ','.join(map(str, statresults))
         print "number of counted mutations in submission: " + str(ncalls)
 
     else:
