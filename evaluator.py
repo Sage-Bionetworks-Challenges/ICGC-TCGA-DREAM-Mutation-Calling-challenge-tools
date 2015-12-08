@@ -111,10 +111,12 @@ def countrecs(submission, truth, vtype='SNV', ignorechroms=None, truthmask=True)
     truvcfh = vcf.Reader(filename=truth)
 
     truchroms = dict([(trurec.CHROM, True) for trurec in truvcfh])
+    usechr = truchroms.keys()[0].startswith('chr')
 
     subrecs = 0
 
     for subrec in subvcfh:
+        subrec = prefix(subrec, usechr)
         if passfilter(subrec):
             if (ignorechroms is None or subrec.CHROM not in ignorechroms):
                 if not mask(subrec, truvcfh, truchroms, active=truthmask):
@@ -128,6 +130,17 @@ def countrecs(submission, truth, vtype='SNV', ignorechroms=None, truthmask=True)
     return subrecs
 
 
+def prefix(rec, usechr):
+    ''' adjust presence/absence of "chr" prefix according to whether usechr is True or False '''
+    if usechr and not rec.CHROM.startswith('chr'):
+        rec.CHROM = 'chr' + rec.CHROM
+    
+    if not usechr and rec.CHROM.startswith('chr'):
+        rec.CHROM = rec.CHROM.replace('chr', '')
+    
+    return rec
+    
+    
 def evaluate(submission, truth, vtype='SNV', ignorechroms=None, truthmask=True):
     ''' return stats on sensitivity, specificity, balanced accuracy '''
 
@@ -144,6 +157,9 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None, truthmask=True):
 
     ''' store list of truth records, otherwise the iterator needs to be reset '''
     trulist = [trurec for trurec in truvcfh]
+    
+    ''' track whether the truth uses the "chr" prefix (all truth entries are assumed to use the same reference) '''
+    usechr = trulist[0].CHROM.startswith('chr')
 
     ''' count records in truth vcf, track contigs/chromosomes '''
     for trurec in trulist:
@@ -165,6 +181,7 @@ def evaluate(submission, truth, vtype='SNV', ignorechroms=None, truthmask=True):
 
     ''' parse submission vcf, compare to truth '''
     for subrec in subvcfh:
+        subrec = prefix(subrec, usechr)
         if relevant(subrec, vtype, ignorechroms) and not mask(subrec, truvcfh, truchroms, active=truthmask):
             if passfilter(subrec):
                 if subrec.is_snp and vtype == 'SNV':
